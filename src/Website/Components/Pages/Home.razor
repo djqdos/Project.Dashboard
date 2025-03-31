@@ -1,0 +1,62 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Caching.Hybrid
+@using Website.HubEvents
+
+@inject HybridCache hybridCache;
+@inject NavigationManager Navigation
+
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+Cache Val = @_cacheVal
+
+@if (hubNotifications != null && hubNotifications.Any())
+{
+    foreach (var item in hubNotifications)
+    {
+        <div>@item.Id = @item.Name</div>
+    }
+}
+
+
+
+
+@code {
+    private string _cacheVal = string.Empty;
+    private HubConnection? hubConnection;
+    private List<HubSampleEvent> hubNotifications = new List<HubSampleEvent>();
+
+    protected async override Task OnInitializedAsync()
+    {
+        await hybridCache.SetAsync("test:item", "bob2");
+
+
+        _cacheVal = await hybridCache.GetOrCreateAsync($"test:item", async ct =>
+        {
+            await Task.Delay(0);
+            return "bob";
+        }, cancellationToken: default);
+
+
+        var bob = "";
+
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/samplehub"))
+            .Build();
+
+        hubConnection.On<HubSampleEvent>("RecieveSampleHubMessage", (item) =>
+        {
+            hubNotifications.Add(item);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+}

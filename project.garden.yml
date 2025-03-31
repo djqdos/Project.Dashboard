@@ -1,0 +1,21 @@
+apiVersion: garden.io/v2
+kind: Project
+name: project-dashboard
+
+
+defaultEnvironment: local
+
+environments:
+  - name: local
+
+
+providers:
+  - name: local-kubernetes
+    environments: [local]
+
+
+#  - name: terraform
+#    environments: [local]
+#    initRoot: './infrastructure/environments/local/'
+
+

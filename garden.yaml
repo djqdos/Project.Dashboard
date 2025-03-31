@@ -1,0 +1,409 @@
+#########################
+#                       #
+#   SERVICE ACCOUNTS    #
+#                       #
+#########################
+kind: Deploy
+type: kubernetes
+name: service-accounts
+spec:
+  manifestFiles:
+    - manifests/service-accounts/*.yaml
+
+---
+#########################
+#                       #
+#       RABBIT MQ       #
+#                       #
+#########################
+kind: Deploy
+type: kubernetes
+name: rabbitmq
+spec:
+  manifestFiles:
+    - manifests/rabbitmq/*.yaml
+  portForwards:
+    - name: management
+      resource: Service/rabbitmq
+      targetPort: 15672
+      localPort: 15672
+
+
+---
+#########################
+#                       #
+#         REDIS         #
+#                       #
+#########################
+kind: Deploy
+type: kubernetes
+name: redis
+spec:
+  manifestFiles:
+    - manifests/redis/*.yaml
+  portForwards:
+    - name: redis-port
+      resource: Service/redis
+      targetPort: 6379
+      localPort: 6379
+
+
+
+
+#########################
+#                       #
+#        WEBSITE        #
+#                       #
+#########################
+---
+kind: Build
+type: container
+name: website
+description: Website Image
+spec:
+  dockerfile: src/Website/Dockerfile
+#  targetStage: "${command.name == 'test' || command.name == 'dev' || command.params contains 'dev' && (command.params.dev contains 'admin'  || command.params.dev contains '*') ? 'build' : 'final'}"
+
+
+---
+kind: Deploy
+type: kubernetes
+name: website
+description: Website Deployment
+dependencies:
+    - build.website
+spec:
+  portForwards:
+    - name: management
+      resource: Service/website
+      targetPort: 8080
+      localPort: 8080
+  defaultTarget:
+    kind: Deployment
+    name: website
+  manifests:
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: website
+        labels:
+          app: website
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: website
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 1
+        template:
+          metadata:
+            labels:
+              app: website
+          spec:
+            containers:
+              - name: website
+                image: ${actions.build.website.outputs.deploymentImageId}
+                imagePullPolicy: IfNotPresent
+                command:
+                  - dotnet
+                  - Website.dll
+                ports:
+                  - name: http
+                    containerPort: 8080
+                    protocol: TCP
+                env:
+                    - name: ASPNETCORE_ENVIRONMENT
+                      value: Development
+                    - name: ASPNETCORE_URLS
+                      value: "http://+:8080"
+                    - name: NODE_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.hostIP
+
+                # livenessProbe:
+                #   httpGet:
+                #    path: /self
+                #    port: 8080
+                #    scheme: HTTP
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 15 
+
+                # readinessProbe:
+                #   httpGet:
+                #     path: /ready
+                #     port: 8080
+                #     scheme: HTTP
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 15                         
+
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: 500Mi
+                  requests:
+                    cpu: 10m
+                    memory: 120Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: [ "sleep","90" ]
+            terminationGracePeriodSeconds: 120
+
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        labels:
+          app: website
+          HealthChecks: "true"
+        name: website
+      spec:
+        type: ClusterIP
+        ports:
+          - name: http
+            port: 8080
+            protocol: TCP
+        selector:
+          app: website
+
+
+
+
+
+
+#########################
+#                       #
+#     HEALTH CHECK      #
+#                       #
+#########################
+---
+kind: Build
+type: container
+name: healthcheck
+description: healthcheck Image
+spec:
+  dockerfile: src/Healthchecker/Dockerfile
+#  targetStage: "${command.name == 'test' || command.name == 'dev' || command.params contains 'dev' && (command.params.dev contains 'admin'  || command.params.dev contains '*') ? 'build' : 'final'}"
+
+
+---
+kind: Deploy
+type: kubernetes
+name: healthcheck
+description: healthcheck Deployment
+dependencies:
+    - build.healthcheck
+spec:
+  portForwards:
+    - name: healthcheck-ports
+      resource: Service/healthcheck
+      targetPort: 8090
+      localPort: 8090
+  defaultTarget:
+    kind: Deployment
+    name: healthcheck
+  manifests:
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: healthcheck
+        labels:
+          app: healthcheck
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: healthcheck
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 1
+        template:
+          metadata:
+            labels:
+              app: healthcheck
+          spec:
+            containers:
+              - name: healthcheck
+                image: ${actions.build.healthcheck.outputs.deploymentImageId}
+                imagePullPolicy: IfNotPresent
+                command:
+                  - dotnet
+                  - Healthchecker.dll
+                ports:
+                  - name: http
+                    containerPort: 8090
+                    protocol: TCP
+                env:
+                    - name: ui_path
+                      value: "/"
+                    - name: ASPNETCORE_ENVIRONMENT
+                      value: Development
+                    - name: ASPNETCORE_URLS
+                      value: "http://+:8090"
+                    - name: NODE_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.hostIP
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: 500Mi
+                  requests:
+                    cpu: 10m
+                    memory: 120Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: [ "sleep","90" ]
+            terminationGracePeriodSeconds: 120
+
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        labels:
+          app: healthcheck
+        name: healthcheck
+      spec:
+        type: ClusterIP
+        ports:
+          - name: http
+            port: 8090
+            protocol: TCP
+        selector:
+          app: healthcheck
+
+
+
+
+
+
+#########################
+#                       #
+#         API           #
+#                       #
+#########################
+---
+kind: Build
+type: container
+name: api
+description: api Image
+spec:
+  dockerfile: src/API/Dockerfile
+#  targetStage: "${command.name == 'test' || command.name == 'dev' || command.params contains 'dev' && (command.params.dev contains 'admin'  || command.params.dev contains '*') ? 'build' : 'final'}"
+
+
+---
+kind: Deploy
+type: kubernetes
+name: api
+description: API Deployment
+dependencies:
+    - build.api
+spec:
+  portForwards:
+    - name: api-ports
+      resource: Service/api
+      targetPort: 9000
+      localPort: 9000
+  defaultTarget:
+    kind: Deployment
+    name: api
+  manifests:
+    - apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: api
+        labels:
+          app: api
+      spec:
+        replicas: 2
+        selector:
+          matchLabels:
+            app: api
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 1
+        template:
+          metadata:
+            labels:
+              app: api
+          spec:
+            containers:
+              - name: api
+                image: ${actions.build.api.outputs.deploymentImageId}
+                imagePullPolicy: IfNotPresent
+                command:
+                  - dotnet
+                  - API.dll
+                ports:
+                  - name: http
+                    containerPort: 9000
+                    protocol: TCP
+                env:
+                    - name: ASPNETCORE_ENVIRONMENT
+                      value: Development
+                    - name: ASPNETCORE_URLS
+                      value: "http://+:9000"
+                    - name: NODE_IP
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: status.hostIP
+
+                # livenessProbe:
+                #   httpGet:
+                #    path: /self
+                #    port: 9000
+                #    scheme: HTTP
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 15 
+
+                # readinessProbe:
+                #   httpGet:
+                #     path: /ready
+                #     port: 9000
+                #     scheme: HTTP
+                #   initialDelaySeconds: 10
+                #   periodSeconds: 15
+
+                resources:
+                  limits:
+                    cpu: "1"
+                    memory: 500Mi
+                  requests:
+                    cpu: 10m
+                    memory: 120Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                lifecycle:
+                  preStop:
+                    exec:
+                      command: [ "sleep","90" ]
+            terminationGracePeriodSeconds: 120
+
+    - apiVersion: v1
+      kind: Service
+      metadata:
+        labels:
+          app: api
+          HealthChecks: "true"
+        name: api
+      spec:
+        type: ClusterIP
+        ports:
+          - name: http
+            port: 9000
+            protocol: TCP
+        selector:
+          app: api
+

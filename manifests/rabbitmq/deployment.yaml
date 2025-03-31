@@ -1,0 +1,17 @@
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+  labels:
+    HeathChecks: "true"
+
+spec:
+  service:
+    type: LoadBalancer
+  secretBackend:
+    externalSecret: 
+      name: "rabbitmq-secret"
+  replicas: 1
+  rabbitmq:
+    additionalPlugins:
+      - rabbitmq_management

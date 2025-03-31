@@ -1,0 +1,7 @@
+# check if the service account can list services (requirement for healthchecks kubernetes service discovery)
+kubectl auth can-i list services --as=system:serviceaccount:project-dashboard-default:default -n project-dashboard-default
+
+
+# Give cluster admin permissions for the default service account in the project-dashboard-default namespace
+# This will give 'list services' permissions. (See above)
+kubectl create clusterrolebinding --user system:serviceaccount:project-dashboard-default:default kube-system-cluster-admin --clusterrole cluster-admin
