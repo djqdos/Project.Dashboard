@@ -5,3 +5,8 @@ kubectl auth can-i list services --as=system:serviceaccount:project-dashboard-de
 # Give cluster admin permissions for the default service account in the project-dashboard-default namespace
 # This will give 'list services' permissions. (See above)
 kubectl create clusterrolebinding --user system:serviceaccount:project-dashboard-default:default kube-system-cluster-admin --clusterrole cluster-admin
+
+
+
+# Add the rabbitmq CRD operator
+kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
