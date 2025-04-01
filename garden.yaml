@@ -76,8 +76,8 @@ spec:
   portForwards:
     - name: management
       resource: Service/website
-      targetPort: 8080
-      localPort: 8080
+      targetPort: 9010
+      localPort: 9010
   defaultTarget:
     kind: Deployment
     name: website
@@ -112,33 +112,33 @@ spec:
                   - Website.dll
                 ports:
                   - name: http
-                    containerPort: 8080
+                    containerPort: 9010
                     protocol: TCP
                 env:
                     - name: ASPNETCORE_ENVIRONMENT
                       value: Development
                     - name: ASPNETCORE_URLS
-                      value: "http://+:8080"
+                      value: "http://+:9010"
                     - name: NODE_IP
                       valueFrom:
                         fieldRef:
                           fieldPath: status.hostIP
 
-                # livenessProbe:
-                #   httpGet:
-                #    path: /self
-                #    port: 8080
-                #    scheme: HTTP
-                #   initialDelaySeconds: 10
-                #   periodSeconds: 15 
+                livenessProbe:
+                  httpGet:
+                   path: /health/liveness
+                   port: 9010
+                   scheme: HTTP
+                  initialDelaySeconds: 10
+                  periodSeconds: 15 
 
-                # readinessProbe:
-                #   httpGet:
-                #     path: /ready
-                #     port: 8080
-                #     scheme: HTTP
-                #   initialDelaySeconds: 10
-                #   periodSeconds: 15                         
+                readinessProbe:
+                  httpGet:
+                    path: /health/ready
+                    port: 9010
+                    scheme: HTTP
+                  initialDelaySeconds: 10
+                  periodSeconds: 15                         
 
                 resources:
                   limits:
@@ -166,7 +166,7 @@ spec:
         type: ClusterIP
         ports:
           - name: http
-            port: 8080
+            port: 9010
             protocol: TCP
         selector:
           app: website
@@ -202,8 +202,8 @@ spec:
   portForwards:
     - name: healthcheck-ports
       resource: Service/healthcheck
-      targetPort: 8090
-      localPort: 8090
+      targetPort: 9020
+      localPort: 9020
   defaultTarget:
     kind: Deployment
     name: healthcheck
@@ -238,7 +238,7 @@ spec:
                   - Healthchecker.dll
                 ports:
                   - name: http
-                    containerPort: 8090
+                    containerPort: 9020
                     protocol: TCP
                 env:
                     - name: ui_path
@@ -246,7 +246,7 @@ spec:
                     - name: ASPNETCORE_ENVIRONMENT
                       value: Development
                     - name: ASPNETCORE_URLS
-                      value: "http://+:8090"
+                      value: "http://+:9020"
                     - name: NODE_IP
                       valueFrom:
                         fieldRef:
@@ -276,7 +276,7 @@ spec:
         type: ClusterIP
         ports:
           - name: http
-            port: 8090
+            port: 9020
             protocol: TCP
         selector:
           app: healthcheck

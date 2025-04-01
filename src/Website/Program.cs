@@ -85,7 +85,7 @@ builder.Services
     .AddHealthChecks()
     .AddProcessAllocatedMemoryHealthCheck(1024, name: "Memory")
     .AddRedis(builder.Configuration.GetValue<string>("redis"))
-    .AddSignalRHub("http://localhost:8080/samplehub")
+    .AddSignalRHub("http://localhost:9010/samplehub")
     .AddRabbitMQ();
 
 
@@ -121,5 +121,25 @@ app.MapHealthChecks("/health", new HealthCheckOptions
     ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
 });
 
- 
+app.MapHealthChecks("/health/liveness", new HealthCheckOptions
+{
+    Predicate = _ => false,
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var json = new
+        {
+            status = report.Status.ToString(),
+            description = "Liveness check - application is up"
+        };
+        await context.Response.WriteAsJsonAsync(json);
+    }
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions {
+    Predicate = r => r.Tags.Contains("ready"),
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
+
 app.Run();
+ 
